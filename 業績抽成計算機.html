@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>業績結算系統 2026</title>
+    <style>
+        :root { --p-color: #2196F3; --s-color: #4CAF50; --d-color: #f44336; }
+        body { font-family: -apple-system, sans-serif; background: #f5f5f7; margin: 0; padding: 15px; padding-bottom: 100px; }
+        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h3 { margin-top: 0; border-left: 4px solid var(--p-color); padding-left: 10px; font-size: 16px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+        input { padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 100%; box-sizing: border-box; }
+        button { border: none; border-radius: 6px; padding: 10px; font-weight: bold; cursor: pointer; }
+        .btn-add { background: var(--p-color); color: white; width: 100%; margin-top: 5px; }
+        .btn-date { background: #fff9c4; color: #333; margin-bottom: 10px; }
+        .btn-calc { background: var(--s-color); color: white; position: fixed; bottom: 20px; left: 15px; right: 15px; height: 50px; font-size: 18px; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .date-block { border: 1px solid #e0e0e0; padding: 10px; border-radius: 8px; margin-bottom: 15px; background: #fafafa; }
+        .item-row { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; background: white; padding: 5px; border-radius: 4px; }
+        .btn-del { background: none; color: var(--d-color); font-size: 18px; padding: 0 10px; }
+        .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        #result { white-space: pre-wrap; font-family: monospace; background: #333; color: #7cfc00; padding: 15px; border-radius: 8px; font-size: 13px; margin-top: 20px; }
+        .mem-btns { display: flex; gap: 10px; margin-bottom: 15px; }
+        .mem-btns button { flex: 1; font-size: 12px; background: #eee; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h3>1. 分成設定</h3>
+    <div class="grid">
+        <input type="text" id="nameA" placeholder="甲方名稱" value="甲方">
+        <input type="number" id="perA" placeholder="甲方%" value="60">
+        <input type="text" id="nameB" placeholder="乙方名稱" value="乙方">
+        <input type="number" id="perB" placeholder="乙方%" value="40">
+    </div>
+    <div class="mem-btns">
+        <button onclick="saveMemory()">💾 儲存記憶</button>
+        <button onclick="clearMemory()">🗑️ 刪除記憶</button>
+        <button onclick="exportReport()">📄 匯出報表</button>
+    </div>
+</div>
+
+<div id="dataContainer">
+    </div>
+
+<button class="btn-date" onclick="addDate()">+ 新增日期</button>
+
+<div id="result" style="display:none;"></div>
+
+<button class="btn-calc" onclick="calculate()">🚀 執行統計並結算</button>
+
+<script>
+    let dataMap = [];
+
+    function addDate(dateVal = '3/01', items = [{b:0, bo:0}]) {
+        const dateId = Date.now();
+        const dateObj = { id: dateId, date: dateVal, items: items };
+        dataMap.push(dateObj);
+        render();
+    }
+
+    function addItem(dateId) {
+        const dateObj = dataMap.find(d => d.id === dateId);
+        dateObj.items.push({b:0, bo:0});
+        render();
+    }
+
+    function removeItem(dateId, itemIdx) {
+        const dateObj = dataMap.find(d => d.id === dateId);
+        dateObj.items.splice(itemIdx, 1);
+        render();
+    }
+
+    function removeDate(dateId) {
+        if(dataMap.length <= 1) return;
+        dataMap = dataMap.filter(d => d.id !== dateId);
+        render();
+    }
+
+    function render() {
+        const container = document.getElementById('dataContainer');
+        container.innerHTML = '';
+        dataMap.forEach(d => {
+            const block = document.createElement('div');
+            block.className = 'date-block';
+            block.innerHTML = `
+                <div class="header-row">
+                    <input type="text" value="${d.date}" style="width:80px" onchange="updateDate(${d.id}, this.value)">
+                    <button onclick="removeDate(${d.id})" style="color:red; background:none">刪除日</button>
+                </div>
+                <div id="items-${d.id}">
+                    ${d.items.map((it, idx) => `
+                        <div class="item-row">
+                            <span>${idx+1}.</span>
+                            <input type="number" placeholder="底價" value="${it.b}" onchange="updateVal(${d.id}, ${idx}, 'b', this.value)">
+                            <input type="number" placeholder="獎金" value="${it.bo}" onchange="updateVal(${d.id}, ${idx}, 'bo', this.value)">
+                            <button class="btn-del" onclick="removeItem(${d.id}, ${idx})">×</button>
+                        </div>
+                    `).join('')}
+                </div>
+                <button class="btn-add" onclick="addItem(${d.id})">+ 新增客人</button>
+            `;
+            container.appendChild(block);
+        });
+    }
+
+    function updateDate(id, val) { dataMap.find(d => d.id === id).date = val; }
+    function updateVal(id, idx, key, val) { dataMap.find(d => d.id === id).items[idx][key] = parseFloat(val) || 0; }
+
+    function calculate() {
+        const nA = document.getElementById('nameA').value;
+        const pA = parseFloat(document.getElementById('perA').value);
+        const nB = document.getElementById('nameB').value;
+        const pB = parseFloat(document.getElementById('perB').value);
+        
+        let tBase = 0, tBonus = 0, tPeople = 0;
+        let body = "";
+
+        dataMap.forEach(d => {
+            body += `\n${d.date}\n`;
+            d.items.forEach((it, idx) => {
+                tBase += it.b; tBonus += it.bo; tPeople++;
+                body += `${idx+1}.底價 ${it.b.toLocaleString()} , 獎金 ${it.bo.toLocaleString()}\n`;
+            });
+        });
+
+        const sA = tBase * (pA / 100);
+        const sBB = tBase * (pB / 100);
+        const sBT = sBB + tBonus;
+        const days = dataMap.length;
+
+        const res = `${nA}    抽成 ${pA}%(金額 ${sA.toLocaleString()})
+${nB}    抽成 ${pB}%(金額 ${sBB.toLocaleString()}) + 獎金(金額 ${tBonus.toLocaleString()})    總金額 ${sBT.toLocaleString()}
+-------------------------------------------------
+${body}
+-------------------------------------------------
+【統計數據】
+上班天數：${days} 天
+總計人數：${tPeople} 人
+每日平均人數：${(tPeople/days).toFixed(2)} 人/日`;
+
+        const resDiv = document.getElementById('result');
+        resDiv.innerText = res;
+        resDiv.style.display = 'block';
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    function saveMemory() {
+        const settings = {
+            nA: document.getElementById('nameA').value,
+            pA: document.getElementById('perA').value,
+            nB: document.getElementById('nameB').value,
+            pB: document.getElementById('perB').value,
+            data: dataMap
+        };
+        localStorage.setItem('bonus_data_2026', JSON.stringify(settings));
+        alert('儲存成功！下次開啟會自動載入。');
+    }
+
+    function loadMemory() {
+        const mem = localStorage.getItem('bonus_data_2026');
+        if(mem) {
+            const s = JSON.parse(mem);
+            document.getElementById('nameA').value = s.nA;
+            document.getElementById('perA').value = s.pA;
+            document.getElementById('nameB').value = s.nB;
+            document.getElementById('perB').value = s.pB;
+            dataMap = s.data;
+            render();
+        } else {
+            addDate();
+        }
+    }
+
+    function clearMemory() {
+        if(confirm('確定要清空所有紀錄嗎？')) {
+            localStorage.removeItem('bonus_data_2026');
+            location.reload();
+        }
+    }
+
+    function exportReport() {
+        const text = document.getElementById('result').innerText;
+        if(!text) { alert('請先點擊計算按鈕'); return; }
+        const blob = new Blob([text], {type: "text/plain"});
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `結算報表_${new Date().toLocaleDateString()}.txt`;
+        a.click();
+    }
+
+    window.onload = loadMemory;
+</script>
+</body>
+</html>
